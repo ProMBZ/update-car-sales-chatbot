@@ -31,7 +31,7 @@ This Streamlit application implements a car sales chatbot powered by LangChain a
 1.  Clone the repository:
 
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/ProMBZ/update-car-sales-chatbot.git
     cd <repository_directory>
     ```
 
