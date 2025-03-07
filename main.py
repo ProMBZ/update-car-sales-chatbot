@@ -186,26 +186,34 @@ def tavily_search_with_images(query):
 def compare_prices(car_model):
     search_query = f"{car_model} used car price comparison"
     results = tavily_search_with_images(search_query)
-    if isinstance(results, dict) and results.get('results'):
+
+    if isinstance(results, dict) and results.get('results') and results['results']:
         competitor_price_info = results['results'][0]['content']
         search_url = results['results'][0]['url'] if results['results'] else "No search URL found."
-        # Use fuzzy matching to get the closest model key
+
         car_model_lower = car_model.lower()
         matches = difflib.get_close_matches(car_model_lower, used_car_stock.keys(), n=1, cutoff=0.7)
         if matches:
             car_model_lower = matches[0]
+
         if car_model_lower in used_car_stock:
-            # Get the original price and apply a discount factor for a more competitive price
             original_price = used_car_stock[car_model_lower]["price"]
-            discount_factor = 0.90  # Apply a 10% discount for display
+            discount_factor = 0.90
             our_price = int(original_price * discount_factor)
             our_interior = used_car_stock[car_model_lower]["interior"]
 
             try:
-                import re
-                prices = re.findall(r'\<span class="math-inline">\\d\+\(?\:,\\d\+\)?', competitor_price_info)
+                # More general price extraction
+                prices = re.findall(r'\$\d+(?:,\d+)?|\d+(?:,\d+)?\$', competitor_price_info)
                 if prices:
-                    online_prices = [int(price.replace('</span>', '').replace(',', '')) for price in prices]
+                    online_prices = []
+                    for price_str in prices:
+                        price_num = re.findall(r'\d+(?:,\d+)?', price_str)[0].replace(',', '')
+                        try:
+                            online_prices.append(int(price_num))
+                        except ValueError:
+                            print(f"Failed to convert price: {price_num}")
+
                     if online_prices:
                         average_online_price = sum(online_prices) / len(online_prices)
                         price_difference = our_price - average_online_price
@@ -218,17 +226,22 @@ def compare_prices(car_model):
                                                   f"While online prices average ${average_online_price:,.0f}, we offer added value through our dealership's benefits. ")
                         else:
                             comparison_message = (f"Our {car_model.capitalize()} is competitively priced at ${our_price:,}, "
-                                                  "matching the average online price. ")
+                                                  f"matching the average online price. ")
 
                         return (f"{comparison_message}It features {our_interior}. Check online prices here: "
                                 f"[{search_url}]({search_url}). We also offer [mention dealership benefits here].")
                     else:
                         return (f"Our {car_model.capitalize()} is priced at ${our_price:,} and features {our_interior}. "
-                                "We couldn't find comparable online prices, but we offer [mention dealership benefits here].")
+                                "We found some price data, but could not parse it. We offer [mention dealership benefits here].")
+
+                else:
+                    return (f"Our {car_model.capitalize()} is priced at ${our_price:,} and features {our_interior}. "
+                            "We couldn't find comparable online prices, but we offer [mention dealership benefits here].")
+
             except Exception as e:
                 print(f"Error adjusting competitor price: {e}")
                 return (f"Our {car_model.capitalize()} is priced at ${our_price:,} and features {our_interior}. "
-                        "We encountered an error comparing prices, but we offer [mention dealership benefits here].")
+                        f"We encountered an error comparing prices: {e}, but we offer [mention dealership benefits here].")
         else:
             return (f"Other dealers are selling the {car_model.capitalize()} at these prices: {competitor_price_info} "
                     f"Check it out here: [{search_url}]({search_url}).")
@@ -438,7 +451,7 @@ if prompt := st.chat_input("How can I assist you with your car needs today?"):
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
     # Check for trigger keywords and if the lead hasn't been submitted yet
-    keywords = ["contact me", "whatsapp", "book", "interested", "call me", "reach me", "phone"]
+    keywords = ["contact me", "whatsapp", "book me", "contact details", "call me", "reach me", "phone"]
     if any(keyword in prompt.lower() for keyword in keywords) and not st.session_state.lead_submitted:
         st.session_state.show_lead_form = True
 
